@@ -110,12 +110,16 @@ class CocoEvaluator(object):
 
             scores = prediction["scores"].tolist()
             labels = prediction["labels"].tolist()
-
             rles = [
                 mask_util.encode(
-                    np.array(mask[0, :, :, np.newaxis], order="F"))[0]
+                    np.array(mask[0, :, :, np.newaxis], dtype=np.uint8, order="F"))[0]
                 for mask in masks
             ]
+            # rles = [
+            #     mask_util.encode(
+            #         np.array(mask[0, :, :, np.newaxis], order="F"))[0]
+            #     for mask in masks
+            # ]
             for rle in rles:
                 rle["counts"] = rle["counts"].decode("utf-8")
 
