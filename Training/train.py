@@ -52,43 +52,6 @@ def get_argparser():
 
 def main():
     args = get_argparser()
-    # classes = utils.parse_config(args.config_path)
-    # assert len(
-    #     classes) == args.num_classes, "Number of classes in config and num_classes should be same"
-    # d = loader.CellDataset(
-    #     args.root_dir, None, args.labels_type, args.model, classes)
-    # data_loader = torch.utils.data.DataLoader(
-    #     d, batch_size=1, shuffle=True, num_workers=4,
-    # )
-    # for _ in data_loader:
-    #     pass
-
-    # model = models.get_model(
-    #     args.model, args.max_instances, args.model_weight, args.num_classes)
-    # if args.cuda:
-    #     model.cuda()
-
-    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    # music_trainer = trainer.MUSIC_ANALYSIS(
-    #     model, optimizer, args.cuda, args.experiment_name, args.val_step)
-
-    # for epoch in range(args.epochs):
-    #     prev_val_acc = music_trainer.best_val_accuracy
-    #     music_trainer.train(epoch, train_iterator,
-    #                         val_iterator, test=False)
-    #     # logger.info(
-    #     #     f'Epoch {epoch}, Best Epoch {music_trainer.best_epoch},\
-    #     # Best Accuracy {music_trainer.best_val_accuracy}')
-
-    #     save_dir = os.path.join(args.checkpoint_dir, args.experiment_name)
-    #     os.makedirs(save_dir, exist_ok=True)
-    #     if music_trainer.best_val_accuracy > prev_val_acc:
-    #         torch.save(music_trainer.best_model.state_dict(), os.path.join(
-    #             save_dir, args.version+"_"+str(music_trainer.best_epoch) +
-    #             "_"+str(music_trainer.best_val_accuracy)+".pt"))
-
-    device = torch.device(
-        'cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     # our dataset has two class
     classes = utils.parse_config(args.config_path)
@@ -100,7 +63,7 @@ def main():
 
     indices = torch.arange(len(dataset)).tolist()
     print (len(indices))
-    dataset = torch.utils.data.Subset(dataset, indices[:5])
+    dataset = torch.utils.data.Subset(dataset, indices[:45])
     dataset_test = torch.utils.data.Subset(dataset_test, indices[-5:])
     print (len(dataset), len(dataset_test))
     # define training and validation data loaders
@@ -114,11 +77,10 @@ def main():
 
     # get the model using our helper function
     model = models.get_model(
-        args.model, args.max_instances, args.model_weight, args.num_classes)
+        args.model, args.max_instances, args.model_weight, args.num_classes+1)
     if args.cuda:
         model.cuda()
     # move model to the right device
-    model.to(device)
 
     # construct an optimizer
     params = [p for p in model.parameters() if p.requires_grad]
@@ -130,7 +92,7 @@ def main():
                                                    gamma=0.05)
 
     # let's train it for 10 epochs
-    num_epochs = 1
+    num_epochs = 10
 #     model.load_state_dict(torch.load("checkpoints/8_epoch.pt"))
     for epoch in range(num_epochs):
         # train for one epoch, printing every 10 iterations

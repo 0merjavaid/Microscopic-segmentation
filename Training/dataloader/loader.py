@@ -95,7 +95,7 @@ class CellDataset(object):
             boxes.append(bbox)
             classes.append(self.classes[cls])
         boxes = torch.as_tensor(boxes, dtype=torch.float32)
-        classes = torch.as_tensor(classes, dtype=torch.int)
+        classes = torch.as_tensor(classes, dtype=torch.int64)
         masks = torch.as_tensor(masks, dtype=torch.uint8)
         bin_mask = cv2.drawContours(bin_mask, all_points, -1, 1, -1)
         bin_mask = torch.as_tensor(bin_mask, dtype=torch.uint8)
@@ -108,6 +108,7 @@ class CellDataset(object):
         target["image_id"] = torch.tensor([idx])
         target["area"] = area
         target["iscrowd"] = iscrowd
+        target["binmask"] = bin_mask
 
         if self.transforms is not None:
             img, target = self.transforms(img, target)
