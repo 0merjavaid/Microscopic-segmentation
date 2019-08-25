@@ -22,7 +22,11 @@ def initialize_pairs(root, binary):
     dataset = list()
     sets = os.listdir(root)
     sets = [i for i in sets if "set" in i]
-    classes = utils.parse_config("config.txt")
+    if binary == 2:
+        classes = {"cell": 1}
+    else:
+        classes = utils.parse_config("config.txt")
+        assert len(classes)+1 == binary
     assert len(sets) > 1, "No Sets found inside the data directory"
 
     for a_set in sets:
@@ -35,7 +39,7 @@ def initialize_pairs(root, binary):
         masks = list()
         for key in classes.keys():
             class_id = classes[key]
-            class_name = key + ".png"
+            class_name = key + ".png" if binary != 2 else "instances_ids.png"
             class_label_path = os.path.join(set_path, class_name)
             assert class_label_path in pngs, class_name+" Not Found"
             mask = cv2.imread(class_label_path)
@@ -43,19 +47,9 @@ def initialize_pairs(root, binary):
 
             for poly in polygons:
                 target_json["shapes"].append(
-                    {"label": key, "points": poly.reshape(-1, 2).tolist()})
+                    {"label": key, "points": poly})
         with open(tifs[0].replace("tif", "json"), 'w') as f:
             json.dump(target_json, f)
-
-        # one_class_seg = glob.glob(os.path.join(set_path, "feature_1.png"))
-        # assert len(one_class_seg) == 1, "Feature 1 image not found"
-
-    #     masks.append((one_class_seg[0], -1))
-    #     img_path = tifs
-    #     masks.append((img_path[0], 0))
-    #     dataset.append(masks)
-    # assert len(dataset) == len(sets)
-    # return dataset
 
 
 def mask_to_poly(mask, classes):
@@ -67,24 +61,17 @@ def mask_to_poly(mask, classes):
     bin_mask = np.zeros((mask.shape[0], mask.shape[1]))
     for uid in unique_ids:
         segment = mask.copy()
+        uid = uid if classes != 2 else np.array([uid] * 3)
+
         segment = cv2.inRange(segment, uid, uid)
 
         contours, hierarchy = cv2.findContours(
             segment, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        try:
-            assert len(contours) == 1, len(contours)
-        except:
-            max_area = 0
-            best_contour = 0
-            for cnt in contours:
-                area = cv2.contourArea(cnt)
-                if area > max_area:
-                    best_contour = cnt
-                    max_area = area
 
-            contours = [best_contour]
-
-        contours = contours[0]
+        if len(contours) > 1:
+            contours = [cnt.reshape(1, -1, 2).tolist() for cnt in contours]
+        else:
+            contours = np.array(contours).reshape(1, -1, 2).tolist()
 
         points.append(contours)
     return points
