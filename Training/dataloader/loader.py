@@ -43,12 +43,9 @@ class CellDataset(object):
                 for shape in shapes:
                     cls = shape["label"]
                     points = shape["points"]
-                    if len(points) > 1:
-                        points = [np.array(cnt).reshape(-1, 1, 2).astype(int)
-                                  for cnt in points]
-                    else:
-                        points = [
-                            np.array(points).reshape(-1, 1, 2).astype(int)]
+
+                    points = [
+                        np.array(points).reshape(-1, 1, 2).astype(int)]
                     # bbox = np.array(cv2.boundingRect(points))
                     samples.append([tifs[0], cls, points])
             dataset.append(samples)

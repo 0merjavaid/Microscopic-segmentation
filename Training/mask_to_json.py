@@ -2,7 +2,9 @@ import os
 import glob
 import json
 import cv2
+import shutil
 import argparse
+import json2coco
 import numpy as np
 from utils import utils
 import matplotlib.pyplot as plt
@@ -14,6 +16,10 @@ parser.add_argument('--root_dir',  required=True,
                     help='input batch size for training (default: 2)')
 parser.add_argument('--classes', type=int, default=4, required=True,
                     help='--classes 2 if only cell and background')
+parser.add_argument('--convert_to_coco', type=int, default=0,
+                    help='--convert_to_coco 1, if you want to convert ')
+parser.add_argument('--out_dir',  default="dataset/coco/",
+                    help='--where you want to save the final coco annotations')
 
 args = parser.parse_args()
 
@@ -28,12 +34,14 @@ def initialize_pairs(root, binary):
         classes = utils.parse_config("config.txt")
         assert len(classes)+1 == binary
     assert len(sets) > 1, "No Sets found inside the data directory"
+    if args.convert_to_coco:
+        os.makedirs("./temp", exist_ok=True)
 
     for a_set in sets:
         target_json = {"shapes": []}
         set_path = os.path.join(root, a_set)
         tifs = glob.glob(os.path.join(set_path, "raw.tif"))
-        print (tifs)
+
         pngs = glob.glob(os.path.join(set_path, "*png"))
         assert len(tifs) == 1, "Raw tif not found"
         masks = list()
@@ -48,8 +56,23 @@ def initialize_pairs(root, binary):
             for poly in polygons:
                 target_json["shapes"].append(
                     {"label": key, "points": poly})
+
+        print ("Converting", tifs[0])
         with open(tifs[0].replace("tif", "json"), 'w') as f:
             json.dump(target_json, f)
+        if args.convert_to_coco:
+            im_path = "./temp/" + \
+                "_".join(tifs[0].split("/")[-2:])
+            target_json["imagePath"] = im_path.split("/")[-1]
+            with open(im_path.replace("tif", "json"), "w") as f:
+                json.dump(target_json, f)
+            im = cv2.imread(tifs[0])
+            cv2.imwrite(im_path.replace("json", "tif"), im)
+
+    print ("\nConverting to COCO...")
+    json2coco.process(
+        **{"labels": "config.txt", "input_dir": "./temp", "output_dir": args.out_dir})
+    shutil.rmtree("./temp")
 
 
 def mask_to_poly(mask, classes):
@@ -58,7 +81,6 @@ def mask_to_poly(mask, classes):
         -1) if classes == 2 else mask.reshape(-1, mask.shape[2])
     unique_ids = np.unique(unique_colors_mask, axis=0)
     unique_ids = unique_ids[1:]
-    bin_mask = np.zeros((mask.shape[0], mask.shape[1]))
     for uid in unique_ids:
         segment = mask.copy()
         uid = uid if classes != 2 else np.array([uid] * 3)
@@ -67,11 +89,17 @@ def mask_to_poly(mask, classes):
 
         contours, hierarchy = cv2.findContours(
             segment, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
         if len(contours) > 1:
-            contours = [cnt.reshape(1, -1, 2).tolist() for cnt in contours]
-        else:
-            contours = np.array(contours).reshape(1, -1, 2).tolist()
+            max_area = 0
+            bigges_cnt = 0
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area > max_area:
+                    max_area = area
+                    bigges_cnt = cnt
+            contours = [bigges_cnt]
+
+        contours = np.array(contours).reshape(-1, 2).tolist()
 
         points.append(contours)
     return points
