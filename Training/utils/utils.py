@@ -1,4 +1,5 @@
 import os
+from torchvision import transforms
 import mask_utils.transforms as T
 
 
@@ -19,9 +20,22 @@ def collate_fn(batch):
     return tuple(zip(*batch))
 
 
-def get_transform(train):
-    transforms = []
-    transforms.append(T.ToTensor())
-    if train:
-        transforms.append(T.RandomHorizontalFlip(0.5))
-    return T.Compose(transforms)
+def get_transform(model, train):
+    transform = []
+    if model.lower() == "maskrcnn":
+        transform.append(T.ToTensor())
+        if train:
+            transform.append(T.RandomHorizontalFlip(0.5))
+            transform.append(T.RandomVerticalFlip(0.5))
+    else:
+        preprocess = transforms.Compose([
+            # transforms.ToPILImage(),
+            transforms.Resize((512, 512)),
+            transforms.ToTensor(),
+            # transforms.Normalize(mean=[
+            #     0.485, 0.456, 0.406], std=[
+            #     0.229, 0.224, 0.225])
+        ])
+
+        return preprocess
+    return T.Compose(transform)

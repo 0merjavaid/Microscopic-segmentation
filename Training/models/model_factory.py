@@ -1,6 +1,9 @@
 import os
 import torch
-from .model import *
+import torch.nn as nn
+from .maskrcnn import *
+from .unet import Unet34
+import torchvision.models as models
 
 
 def get_model(name, max_instances, weights, classes):
@@ -10,12 +13,16 @@ def get_model(name, max_instances, weights, classes):
     if name.lower() == "maskrcnn":
         assert classes >= 2
         chosen_model = get_mask_rcnn(classes, max_instances)
-        if weights is not None:
-            chosen_model.load_state_dict(torch.load(weights))
 
     elif name.lower() == "unet":
-        pass
+        m_base = nn.Sequential(
+            *(list(models.resnet34(pretrained=True).children())[:8]))
+        chosen_model = Unet34(m_base)
 
     else:
         print (name, " is currently not available, try MaskRCNN or UNET")
+
+    if weights is not None:
+        assert os.path.exists(weights)
+        chosen_model.load_state_dict(torch.load(weights))
     return chosen_model

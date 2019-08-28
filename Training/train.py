@@ -9,6 +9,7 @@ import torch.nn as nn
 from PIL import Image
 from tqdm import tqdm
 from utils import utils
+from trainer import trainer
 from dataloader import loader
 from mask_utils.engine import train_one_epoch, evaluate
 
@@ -16,6 +17,8 @@ from mask_utils.engine import train_one_epoch, evaluate
 def get_argparser():
     parser = argparse.ArgumentParser(
         description='Cell instance segmentation using mask RCNN')
+    parser.add_argument('--epochs', type=int, default=10, metavar='N',
+                        help='Number of epochs (default: 10)')
     parser.add_argument('--batch_size', type=int, default=2, metavar='N',
                         help='input batch size for training (default: 2)')
     parser.add_argument('--num_classes', type=int, default=2, required=True,
@@ -24,8 +27,6 @@ def get_argparser():
                          background then num_classes 2')
     parser.add_argument('--lr', type=float, default=0.005, metavar='LR',
                         help='learning rate (default: 0.0001)')
-    parser.add_argument('--epochs', type=int, default=10,
-                        help='number of epochs')
     parser.add_argument('--labels_type', default='pairs',
                         help='what is the type of labels? "pairs" or "json"', required=True)
     parser.add_argument('--root_dir', default='datasets/images',
@@ -62,20 +63,24 @@ def main():
 
     # our dataset has two class
     classes = utils.parse_config(args.config_path)
-    # use our dataset and defined transformations
-    dataset = loader.CellDataset(
-        args.root_dir, utils.get_transform(train=True), args.labels_type, args.model, classes)
-    dataset_test = loader.CellDataset(
-        args.root_dir, utils.get_transform(train=False), args.labels_type,
-        args.model, classes)
     assert len(
         classes)+1 == args.num_classes, "Number of classes\
         in config and argument is not same"
+    # use our dataset and defined transformations
+    print (args.model)
+    dataset = loader.CellDataset(
+        args.root_dir, utils.get_transform(args.model, train=True), args.labels_type, args.model, classes)
+    dataset_test = loader.CellDataset(
+        args.root_dir, utils.get_transform(
+            args.model, train=False), args.labels_type,
+        args.model, classes)
+
     indices = torch.arange(len(dataset)).tolist()
     print (len(indices))
     dataset = torch.utils.data.Subset(dataset, indices[:45])
     dataset_test = torch.utils.data.Subset(dataset_test, indices[-5:])
-    print (len(dataset), len(dataset_test))
+    print ("Images in Test set", len(dataset_test),
+           "Images in Train set ", len(dataset))
     # define training and validation data loaders
     data_loader = torch.utils.data.DataLoader(
         dataset, batch_size=args.batch_size, shuffle=True, num_workers=4,
@@ -84,9 +89,7 @@ def main():
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test, batch_size=args.batch_size, shuffle=False, num_workers=4,
         collate_fn=utils.collate_fn)
-    print (len(data_loader_test), len(data_loader))
 
-    # get the model using our helper function
     model = models.get_model(
         args.model, args.max_instances, args.weight_path, args.num_classes+1)
     if args.cuda:
@@ -98,19 +101,23 @@ def main():
     if args.infer:
         infer(model, data_loader_test, args.out_dir, classes)
         return
-    # move model to the right device
+
+    # optimizer = torch.optim.SGD(model.parameters(), lr=args.lr,
+    #                             momentum=0.9, weight_decay=0.0005)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    model_trainer = trainer.TrainModel(model, optimizer, args.model, device)
+    for epoch in range(args.epochs):
+        model_trainer.train(epoch, data_loader, data_loader_test)
 
     # construct an optimizer
-    params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=0.005,
-                                momentum=0.9, weight_decay=0.0005)
+
     # and a learning rate scheduler
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                                    step_size=5,
                                                    gamma=0.05)
 
     # let's train it for 10 epochs
-    num_epochs = 10
+
 #     model.load_state_dict(torch.load("checkpoints/8_epoch.pt"))
     for epoch in range(num_epochs):
         # train for one epoch, printing every 10 iterations
