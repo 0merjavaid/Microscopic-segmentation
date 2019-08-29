@@ -6,6 +6,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from utils.utils import *
 import torch.nn.functional as F
+from mask_utils.engine import train_one_epoch, evaluate
 
 
 class TrainModel:
@@ -13,11 +14,8 @@ class TrainModel:
     def __init__(self, model, optimizer, model_type, cuda=False, val_step=50):
         self.cuda = cuda
         self.model = model
-        self.best_epoch = -1
-        self.best_model = None
         self.val_step = val_step
         self.optimizer = optimizer
-        self.best_val_accuracy = 0
         self.model_type = model_type
         self.criterion = nn.BCELoss()
 
@@ -49,7 +47,7 @@ class TrainModel:
                 images, labels)
 
             train_loss.append(loss.cpu().item())
-            if i % 20 == 0:
+            if i == 0:
                 avg_loss = np.mean(train_loss[-10:])
 
                 print(f'Epoch" {epoch}, Iter: {i},TRAINING__   loss :{loss}, , smooth_loss: {avg_loss}')
@@ -58,16 +56,25 @@ class TrainModel:
             loss.backward()
             self.optimizer.step()
 
-    def train_maskrcnn():
-        pass
+    def train_maskrcnn(self, data_loader, test_data_loader,
+                       epoch, print_freq=5):
+        train_one_epoch(self.model, self.optimizer, data_loader,
+                        self.cuda, epoch, print_freq=print_freq)
+        if epoch % 2 == 0:
+            evaluate(self.model, test_data_loader, device=self.cuda)
+            path = "checkpoints/"+str(epoch)+"_maskrcnn_epoch.pt"
+            torch.save(self.model.state_dict(), path)
 
     def train(self, epoch, train_iterator, test_iterator):
         if self.model_type.lower() == "unet":
             self.train_unet(epoch, train_iterator, test_iterator)
             if epoch % 49 == 0:
-                self.test(test_iterator, True)
+                path = "checkpoints/"+str(epoch)+"_UNET_epoch.pt"
+                torch.save(self.model.state_dict(), path)
+                self.test(test_iterator, False)
+
         else:
-            pass
+            self.train_maskrcnn(train_iterator, test_iterator, epoch)
 
     def test(self,  val_iterator, save_images=False):
         print ("\nTesting ...")
@@ -84,7 +91,6 @@ class TrainModel:
                 score = dice.dice_coeff(output, labels)
                 summ += score
                 output = output.cpu().detach().numpy().squeeze()
-                # print (images[0].shape, output.shape, labels[0].shape)
                 im = np.transpose(images[0].cpu().detach(
                 ).numpy().squeeze(), (1, 2, 0))
                 im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)

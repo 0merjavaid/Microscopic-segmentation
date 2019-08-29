@@ -5,9 +5,10 @@ import json
 import torch
 import numpy as np
 from PIL import Image
-from torchvision import transforms
+from torch.utils import data
 import imgaug.augmenters as iaa
 import matplotlib.pyplot as plt
+from torchvision import transforms
 
 
 class CellDataset(object):
@@ -89,7 +90,9 @@ class CellDataset(object):
         target = dict()
         image_list = self.dataset[idx]
         img_path = image_list[0][0]
-        img = Image.open(img_path.replace("tif", "png")).convert("RGB")
+
+        img = cv2.imread(img_path)
+        img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         bin_mask = np.zeros((img.size[1], img.size[0]))
         if self.segmentation_type == "maskrcnn":
             masks = np.zeros((len(image_list), img.size[1], img.size[0]))
@@ -109,7 +112,8 @@ class CellDataset(object):
                 boxes.append(bbox)
                 classes.append(self.classes[cls])
 
-            # cv2.imwrite(img_path.replace(".tif", "_instances.jpg"), instances)
+            # cv2.imwrite(img_path.replace(".tif", "_instances.jpg"),
+            # instances)
             boxes = torch.as_tensor(boxes, dtype=torch.float32)
             classes = torch.as_tensor(classes, dtype=torch.int64)
             masks = torch.as_tensor(masks, dtype=torch.uint8)
@@ -142,14 +146,64 @@ class CellDataset(object):
                 img = self.prep(img)
                 bin_mask = self.transforms(Image.fromarray(bin_mask))
                 img = img.unsqueeze(0)
-                target["image_id"] = torch.tensor([idx])
-                target["boxes"] = torch.zeros(1, 4)
-                target["labels"] = torch.zeros(1, )
-                target["area"] = torch.zeros(1, 1)
-                target["iscrowd"] = torch.zeros(1, 1)
                 target["bin_mask"] = bin_mask.float()
 
         return img, target
+
+    def __len__(self):
+        return len(self.dataset)
+
+
+class Inference_Loader(data.Dataset):
+
+    def __init__(self, root_dir):
+        self.root_dir = root_dir
+        self.dataset = self.initialize()
+        normalize = transforms.Normalize(mean=[
+            0.485, 0.456, 0.406], std=[
+            0.229, 0.224, 0.225])
+        self.transform_maskRCNN = transforms.Compose([
+            transforms.ToTensor(),
+        ])
+        self.transform_unet = transforms.Compose([
+            transforms.Resize((512, 512)),
+            transforms.ToTensor(),
+            normalize,
+        ])
+
+    def initialize(self):
+        dataset = list()
+        dirs = os.listdir(self.root_dir)
+        assert len(dirs) > 0, "No directory found containing images"
+        # print (dirs)
+        for dir in dirs:
+            img_files = [os.path.join(self.root_dir, dir, i)
+                         for i in ['*.tif', '*.png', "*.jpg"]]
+            files = list()
+            for e in img_files:
+                files.extend(glob.glob(e))
+
+            assert len(files) > 0, "No png, tif or jpg files found\
+                in folder " + dir
+            for file in files:
+                dataset.append([dir, file])
+
+        assert len(dataset) > 0, "No files found"
+        # print (dataset)
+        return dataset
+
+    def __getitem__(self, idx):
+        directory, path = self.dataset[idx]
+        # print (path)
+        img_name = path.split("/")[-1].split(".")[0]
+        image = cv2.imread(path)
+        shape = image.shape
+        assert image.ndim > 1, "unable to load image" + img_name
+        image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        mask_rcnn_image = self.transform_maskRCNN(image)
+        unet_image = self.transform_unet(image)
+
+        return directory, img_name, mask_rcnn_image, unet_image, np.array([shape[0], shape[1]])
 
     def __len__(self):
         return len(self.dataset)

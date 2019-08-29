@@ -26,15 +26,11 @@ def get_transform(model, train):
         transform.append(T.ToTensor())
         if train:
             transform.append(T.RandomHorizontalFlip(0.5))
-            transform.append(T.RandomVerticalFlip(0.5))
     else:
         preprocess = transforms.Compose([
-            # transforms.ToPILImage(),
             transforms.Resize((512, 512)),
             transforms.ToTensor(),
-            # transforms.Normalize(mean=[
-            #     0.485, 0.456, 0.406], std=[
-            #     0.229, 0.224, 0.225])
+
         ])
 
         return preprocess

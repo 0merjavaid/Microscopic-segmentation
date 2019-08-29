@@ -6,7 +6,7 @@ from .unet import Unet34
 import torchvision.models as models
 
 
-def get_model(name, max_instances, weights, classes):
+def get_model(name, weights, classes=4, max_instances=250):
     chosen_model = None
     if weights is not None:
         assert os.path.exists(weights)
