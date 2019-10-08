@@ -481,12 +481,20 @@ class COCOeval:
             print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
             return mean_s
         def _summarizeDets():
-            stats = np.zeros((2,))
+            stats = np.zeros((6,))
             stats[0] = _summarize(
                 1, iouThr=0.5, maxDets=self.params.maxDets[2])
-
             stats[1] = _summarize(
+                1, iouThr=0.75, maxDets=self.params.maxDets[2])
+            stats[2] = _summarize(
+                1, iouThr=0.90, maxDets=self.params.maxDets[2])
+
+            stats[3] = _summarize(
                 0, iouThr=0.5, maxDets=self.params.maxDets[2])
+            stats[4] = _summarize(
+                0, iouThr=0.75, maxDets=self.params.maxDets[2])
+            stats[5] = _summarize(
+                0, iouThr=0.90, maxDets=self.params.maxDets[2])
 
             return stats
         def _summarizeKps():

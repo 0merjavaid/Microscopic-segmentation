@@ -25,7 +25,7 @@ def get_argparser():
                         for example if you only have cell and\
                          background then num_classes 2')
     parser.add_argument('--lr', type=float, default=0.005, metavar='LR',
-                        help='learning rate (default: 0.0001)')
+                        help='learning rate, deeplab 5x10-4, UNET , MaskRCNN .')
     parser.add_argument('--labels_type', default='pairs',
                         help='what is the type of labels? "pairs" or "json"', required=True)
     parser.add_argument('--root_dir', default='datasets/images',
@@ -40,10 +40,6 @@ def get_argparser():
                         help='maximum number of instances for maskRCNN default is 500')
     parser.add_argument('--config_path', default='config.txt',
                         help='a File containing the names of classes')
-    parser.add_argument('--infer', type=int, default=0,
-                        help='--infer 1 if you want to se results')
-    parser.add_argument('--out_dir', default="./outputs/",
-                        help='directory where output will be saved')
 
     args = parser.parse_args()
     assert args.labels_type in [
@@ -62,22 +58,24 @@ def main():
 
     # our dataset has two class
     classes = utils.parse_config(args.config_path)
+    print (len(classes), args.num_classes, classes)
     assert len(
         classes)+1 == args.num_classes, "Number of classes\
-        in config and argument is not same"
+    in config and argument is not same"
     # use our dataset and defined transformations
 
     dataset = loader.CellDataset(
-        args.root_dir, utils.get_transform(args.model, train=True), args.labels_type, args.model, classes)
+        args.root_dir, utils.get_transform(args.model, train=True),
+        args.labels_type, args.model, classes)
     dataset_test = loader.CellDataset(
         args.root_dir, utils.get_transform(
             args.model, train=False), args.labels_type,
-        args.model, classes)
+        args.model, classes, mode="Test")
 
     indices = torch.arange(len(dataset)).tolist()
-
-    dataset = torch.utils.data.Subset(dataset, indices[:45])
-    dataset_test = torch.utils.data.Subset(dataset_test, indices[-5:])
+    dataset = torch.utils.data.Subset(dataset, indices[:int(len(indices)*0.9)])
+    dataset_test = torch.utils.data.Subset(
+        dataset_test, indices[int(len(indices)*0.9):])
     print ("Images in Test set", len(dataset_test),
            "Images in Train set ", len(dataset))
     # define training and validation data loaders
@@ -86,11 +84,12 @@ def main():
         collate_fn=utils.collate_fn)
 
     data_loader_test = torch.utils.data.DataLoader(
-        dataset_test, batch_size=args.batch_size, shuffle=False, num_workers=4,
+        dataset_test, batch_size=1, shuffle=True, num_workers=4,
         collate_fn=utils.collate_fn)
 
     model = models.get_model(
         args.model, args.weight_path, args.num_classes, args.max_instances)
+
     if args.cuda:
         device = "cuda:0"
         model.to(device)

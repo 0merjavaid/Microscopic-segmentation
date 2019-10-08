@@ -1,4 +1,5 @@
 import os
+import ast
 import cv2
 import time
 import torch
@@ -11,29 +12,17 @@ from PIL import Image
 from tqdm import tqdm
 from utils import utils
 from dataloader.loader import Inference_Loader
+# Folder name/ Experiment name/ image category/ all images.jpg
 
 
 def get_argparser():
     parser = argparse.ArgumentParser(
         description='Cell instance segmentation using mask RCNN')
-    parser.add_argument('--batch_size', type=int, default=2, metavar='N',
-                        help='input batch size for training (default: 2)')
-    parser.add_argument('--num_classes', type=int, default=4, required=True,
-                        help='Number of classes in case of maskRCNN, \
-                        for example if you only have cell and\
-                         background then num_classes 2')
-    parser.add_argument('--root_dir', default='datasets/images',
-                        help='directory that contains images and labels\
-                         folders', required=True)
-    parser.add_argument('--maskrcnn_weight', default=None, required=True,
-                        help='path to model weight file to be loaded')
-    parser.add_argument('--unet_weight', default=None,
-                        help='path to model weight file to be loaded',
-                        required=True)
-    parser.add_argument('--config_path', default='config.txt',
-                        help='a File containing the names of classes')
+
     parser.add_argument('--out_dir', default="./outputs/",
                         help='directory where output will be saved')
+    parser.add_argument('--config_path', default="./configuration.txt",
+                        help='path of configuration file')
     parser.add_argument('--max_instances', type=int, default=350,
                         help='maximum number of instances for maskRCNN default is 500')
 
@@ -44,19 +33,18 @@ def get_argparser():
 
 class Inference:
 
-    def __init__(self, root_dir, unet_weight, maskrcnn_weight, device, config, output_dir,
-                 num_classes, batch_size, num_instances):
-        assert unet_weight is not None and maskrcnn_weight is not None
-        self.device = device
+    def __init__(self, model_name, experiment_name, root_dir, weights_path, device, output_dir,
+                 num_classes, classes, batch_size, num_instances):
         self.thres = 0.5
+        self.device = device
+        self.classes = classes
         self.out_dir = output_dir
+        self.model_name = model_name
         self.batch_size = batch_size
-        self.unet = models.get_model("unet", unet_weight)
-        self.config = utils.parse_config(config)
-        self.maskrcnn = models.get_model("maskrcnn", maskrcnn_weight,
-                                         num_classes, num_instances)
-        self.unet.to(device).eval()
-        self.maskrcnn.to(device).eval()
+        self.experiment_name = experiment_name
+        self.model = models.get_model(
+            model_name, weights_path, num_classes, num_instances)
+        self.model.to(device).eval()
         test_loader = Inference_Loader(root_dir)
         self.iterator = torch.utils.data.DataLoader(test_loader,
                                                     batch_size=batch_size,
@@ -70,23 +58,43 @@ class Inference:
                 unet_img = unet_img.to(self.device)
                 mask_img = mask_img.to(self.device)
 
-                unet_out = self.unet(unet_img)
-                mask_out = self.maskrcnn(mask_img)
+                if self.model_name == "unet":
+                    output = self.model(unet_img)
+                    self.process_unet(output, img_name, directory,
+                                      self.experiment_name, shape)
+                elif self.model_name == "maskrcnn":
+                    output = self.model(mask_img)
+                    self.process_mask(output, img_name, directory,
+                                      self.experiment_name, mask_img)
+                elif self.model_name == "deeplab":
+                    output = self.model(unet_img)["out"]
+                    self.process_deeplab(
+                        output, img_name, directory, self.experiment_name, shape)
 
-                self.process_unet(unet_out, img_name, directory, shape)
-                self.process_mask(mask_out, img_name, directory, mask_img)
+    def process_deeplab(self, output, img_name, directory, experiment_name, shape):
+        output = torch.max(output, 1)[1]
+        output = output.cpu().detach().numpy()
+        for i in range(len(output)):
+            test_path = os.path.join(
+                self.out_dir, directory[i], experiment_name, "deeplab", img_name[i]+".png")
+            output_dir = os.path.join(
+                self.out_dir, directory[i], experiment_name, "deeplab", img_name[i]+".png")
+            os.makedirs(output_dir, exist_ok=True)
+            mask = output[i]
+            mask = cv2.resize(mask.astype("uint8"), (shape[i][1], shape[i][0]))
+            cv2.imwrite(os.path.join(output_dir, "deeplab.png"), mask)
 
-    def process_unet(self, output, img_name, directory, shape):
+    def process_unet(self, output, img_name, directory, experiment_name, shape):
         output = output.cpu().detach().numpy()
         output = ((output > 0.5).astype(float)*255).astype("uint8")
-        for i in range(self.batch_size):
+        for i in range(len(output)):
             output_dir = os.path.join(self.out_dir, directory[i], img_name[i])
             os.makedirs(output_dir, exist_ok=True)
             mask = output[i]
             mask = cv2.resize(mask, (shape[i][1], shape[i][0]))
             cv2.imwrite(os.path.join(output_dir, "unet.png"), mask)
 
-    def process_mask(self, outputs, img_name, directory, images):
+    def process_mask(self, outputs, img_name, directory, experiment_name, images):
         images = images.cpu().detach().numpy()
         for i, output in enumerate(outputs):
             scores = output["scores"]
@@ -103,7 +111,7 @@ class Inference:
             img = np.transpose(images[i], [1, 2, 0])
 
             overlay, colored_mask, instances = self.visualize(
-                img, mask, scores, bboxes, classes, self.config, self.thres)
+                img, mask, scores, bboxes, classes, self.thres)
 
             output_boxes = torch.cat(
                 (classes.float().view(-1, 1), bboxes), 1).cpu().detach().numpy()
@@ -114,18 +122,20 @@ class Inference:
             cv2.imwrite(os.path.join(self.out_dir, directory[i],
                                      img_name[i], "colored_mask.png"), colored_mask)
 
-            for j, instance_class in enumerate(["combined"]+list(self.config.keys())):
+            for j, instance_class in enumerate(["combined"]+self.classes):
                 cv2.imwrite(os.path.join(
                     self.out_dir, directory[i], img_name[i], instance_class+".png"), instances[j])
             np.savetxt(os.path.join(
                 self.out_dir, directory[i], img_name[i], "boxes.txt"), output_boxes.reshape(-1, 5))
 
-    def visualize(self, image, mask, scores, boxes, classes, mapping,
+    def visualize(self, image, mask, scores, boxes, classes,
                   threshold=0.5):
+
         final_mask = np.zeros((image.shape[0], image.shape[1], image.shape[2]))
         instances = np.zeros(
-            (len(mapping)+1, mask.shape[1], mask.shape[2])).astype("uint16")
-        instance_ids = [1]*len(mapping)
+            (len(self.classes)+1, mask.shape[1], mask.shape[2])).astype("uint16")
+        instance_ids = [1]*(len(self.classes)+1)
+
         for i, channel in enumerate(mask):
             cls = classes[i]
             channel[channel > threshold] = 1
@@ -138,16 +148,13 @@ class Inference:
             final_mask[final_mask > 255] = 255
 
         for cls, box, score in zip(classes, boxes, scores):
-
             cls = cls.cpu().detach().item()
             score = score.cpu().detach().item()
 
             cv2.rectangle(final_mask, (box[0], box[1]),
                           (box[2], box[3]), (0, 255, 255), 2)
-            cv2.putText(final_mask, str(list(mapping.keys())[cls-1])+"    " +
-                        str(score)[:4], (box[0], box[1]
-                                         ), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, (255, 255, 255), 1)
+            cv2.putText(final_mask, self.classes[cls-1] + "    " + str(score)[
+                        :4], (box[0], box[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         final_mask = final_mask.astype("uint8")
         image = image.astype(float)*255
@@ -158,15 +165,56 @@ class Inference:
         return image.astype("uint8"), final_mask, instances
 
 
+def parse_cfg(path="./configuration.txt"):
+    assert os.path.exists(path), "configuration file not found"
+
+    with open(path, "r") as f:
+        lines = f.readlines()
+    start = False
+    cfg = {'experiments': []}
+    for line in lines:
+        if len(line.strip()) == 0 or line[0] == "#":
+            continue
+
+        if not start and "=segmentation=" in line.strip().lower():
+            start = True
+            continue
+        elif start and line.strip().lower()[0] == "=":
+            break
+        else:
+            if line.strip().lower()[0] == "[":
+                cfg['experiments'].append(
+                    ast.literal_eval(line.strip().lower()))
+            else:
+                line = line.split("=")
+                cfg[line[0].strip().lower()] = line[1].strip()
+    return cfg
+
+
 def main():
     args = get_argparser()
-    device = torch.device("cuda" if torch.cuda.is_available()
+    cfg = parse_cfg(args.config_path)
+    device = torch.device("cuda:0" if torch.cuda.is_available()
                           else "cpu")
-    inference = Inference(args.root_dir, args.unet_weight, args.maskrcnn_weight,
-                          device, args.config_path, args.out_dir, args.num_classes,
-                          args.batch_size, args.max_instances)
+    number_of_experiments = int(cfg["num_of_exp"])
+    root_dir = cfg["root_dir"]
+    experiments = cfg["experiments"]
+    assert number_of_experiments == len(cfg["experiments"])
+    for i in range(number_of_experiments):
+        experiment_name = experiments[i][0]
+        model_name = experiments[i][1]
+        num_classes = int(experiments[i][2])
+        classes = experiments[i][3]
+        batch_size = int(experiments[i][5])
+        weights_path = experiments[i][4]
 
-    inference.infer()
+        print ("Processing for ", model_name)
+
+        inference = Inference(model_name, experiment_name, root_dir, weights_path,
+                              device, args.out_dir, num_classes, classes,
+                              batch_size, args.max_instances)
+
+        inference.infer()
 
 if __name__ == "__main__":
     main()

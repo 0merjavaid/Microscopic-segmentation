@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from .maskrcnn import *
 from .unet import Unet34
+from .deeplab import *
 import torchvision.models as models
 
 
@@ -19,8 +20,11 @@ def get_model(name, weights, classes=4, max_instances=250):
             *(list(models.resnet34(pretrained=True).children())[:8]))
         chosen_model = Unet34(m_base)
 
+    elif name.lower() == "deeplab":
+        chosen_model = get_deeplab()
+
     else:
-        print (name, " is currently not available, try MaskRCNN or UNET")
+        print (name, " is currently not available, try MaskRCNN, UNET or Deeplab")
 
     if weights is not None:
         assert os.path.exists(weights)

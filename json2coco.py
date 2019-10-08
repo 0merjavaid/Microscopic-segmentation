@@ -105,6 +105,7 @@ def process(labels, input_dir, output_dir):
             points = shape['points']
             # print (points)
             # 0/0
+
             label = shape['label']
             shape_type = shape.get('shape_type', None)
             mask = labelme.utils.shape_to_mask(

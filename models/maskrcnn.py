@@ -1,13 +1,20 @@
 import torchvision
+import torch.nn as nn
+import models.models_lpf.resnet as resnet
+from torchvision.models.detection import MaskRCNN
+from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+from torchvision.models.detection.backbone_utils import BackboneWithFPN
 
 
 def get_mask_rcnn(num_classes, max_instances):
     # load an instance segmentation model pre-trained pre-trained on COCO
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn(
-        pretrained=True, box_detections_per_img=max_instances)
-
+    # model = torchvision.models.detection.maskrcnn_resnet50_fpn(
+    #     pretrained=True, box_detections_per_img=max_instances)
+    bb = resnet_fpn_backbone("101", False)
+    model = MaskRCNN(bb,
+                     num_classes=91)
     # get number of input features for the classifier
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     # replace the pre-trained head with a new one
@@ -20,5 +27,26 @@ def get_mask_rcnn(num_classes, max_instances):
     model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
                                                        hidden_layer,
                                                        num_classes)
-
     return model
+
+
+def resnet_fpn_backbone(backbone_name, pretrained):
+    import torch
+    backbone = resnet.resnet101(filter_size=5)
+    backbone.load_state_dict(torch.load(
+        './checkpoints/resnet101_lpf5.pth.tar')['state_dict'])
+    for name, parameter in backbone.named_parameters():
+        if 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
+            parameter.requires_grad_(False)
+
+    return_layers = {'layer1': 0, 'layer2': 1, 'layer3': 2, 'layer4': 3}
+
+    in_channels_stage2 = backbone.inplanes // 8
+    in_channels_list = [
+        in_channels_stage2,
+        in_channels_stage2 * 2,
+        in_channels_stage2 * 4,
+        in_channels_stage2 * 8,
+    ]
+    out_channels = 256
+    return BackboneWithFPN(backbone, return_layers, in_channels_list, out_channels)

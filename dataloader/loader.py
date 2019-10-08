@@ -3,10 +3,11 @@ import cv2
 import glob
 import json
 import torch
+import random
 import numpy as np
+from skimage.transform import rotate
 from PIL import Image
 from torch.utils import data
-import imgaug.augmenters as iaa
 import matplotlib.pyplot as plt
 from torchvision import transforms
 
@@ -16,8 +17,6 @@ class CellDataset(object):
     def __init__(self, root, transform, label_type, segmentation_type, classes, mode="Train"):
         self.root = root
         self.mode = mode
-        self.lr = iaa.Sequential([iaa.Fliplr(1)])
-        self.ud = iaa.Sequential([iaa.Flipud(1)])
         self.normalize = transforms.Normalize(mean=[
             0.485, 0.456, 0.406], std=[
             0.229, 0.224, 0.225])
@@ -29,6 +28,7 @@ class CellDataset(object):
         self.label_type = label_type
         self.transforms = transform
         self.segmentation_type = segmentation_type
+
         if label_type == "pairs":
             self.dataset = self.initialize_pairs()
         elif label_type == "json":
@@ -85,6 +85,23 @@ class CellDataset(object):
         assert len(dataset) == len(files)
         return dataset
 
+    def augment(self, img, mask):
+        if random.randint(0, 10) % 2 == 0:
+            img = np.flipud(img)
+            mask = np.flipud(mask)
+
+        if random.randint(0, 10) % 2 == 0:
+            img = np.fliplr(img)
+            mask = np.fliplr(mask)
+
+        if random.randint(0, 100) % 2 == 0:
+            angle = [90, 180, 270]
+            angle = angle[random.randint(0, 2)]
+            img = (rotate(img, angle)*255).astype("uint8")
+            mask = rotate(mask, angle)
+
+        return img, mask
+
     def __getitem__(self, idx):
         # load images ad masks
         target = dict()
@@ -112,8 +129,6 @@ class CellDataset(object):
                 boxes.append(bbox)
                 classes.append(self.classes[cls])
 
-            # cv2.imwrite(img_path.replace(".tif", "_instances.jpg"),
-            # instances)
             boxes = torch.as_tensor(boxes, dtype=torch.float32)
             classes = torch.as_tensor(classes, dtype=torch.int64)
             masks = torch.as_tensor(masks, dtype=torch.uint8)
@@ -133,18 +148,15 @@ class CellDataset(object):
             bin_mask = cv2.drawContours(bin_mask, all_points, -1, 1, -1)
             img = np.array(img)
             if self.mode == "Train":
-                if np.random.randint(0, 10) % 2 == 0:
-                    img = self.lr.augment_image(np.array(img))
-                    bin_mask = self.lr.augment_image(bin_mask)
-                if np.random.randint(0, 10) % 2 == 0:
-                    img = self.ud.augment_image(np.array(img))
-                    bin_mask = self.ud.augment_image(bin_mask)
+
+                img, bin_mask = self.augment(img, bin_mask)
 
             if self.transforms is not None:
 
                 img = self.transforms(Image.fromarray(img))
                 img = self.prep(img)
-                bin_mask = self.transforms(Image.fromarray(bin_mask))
+                bin_mask = self.transforms(
+                    Image.fromarray(bin_mask.squeeze().astype(float)))
                 img = img.unsqueeze(0)
                 target["bin_mask"] = bin_mask.float()
 
@@ -168,7 +180,7 @@ class Inference_Loader(data.Dataset):
         self.transform_unet = transforms.Compose([
             transforms.Resize((512, 512)),
             transforms.ToTensor(),
-            normalize,
+            # normalize,
         ])
 
     def initialize(self):

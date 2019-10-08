@@ -72,7 +72,8 @@ def initialize_pairs(root, binary):
     print ("\nConverting to COCO...")
     json2coco.process(
         **{"labels": "config.txt", "input_dir": "./temp", "output_dir": args.out_dir})
-    shutil.rmtree("./temp")
+    if os.path.exists("./temp"):
+        shutil.rmtree("./temp")
 
 
 def mask_to_poly(mask, classes):
@@ -84,11 +85,12 @@ def mask_to_poly(mask, classes):
     for uid in unique_ids:
         segment = mask.copy()
         uid = uid if classes != 2 else np.array([uid] * 3)
-
+        # print (uid, segment.shape)
         segment = cv2.inRange(segment, uid, uid)
 
         contours, hierarchy = cv2.findContours(
             segment, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
         if len(contours) > 1:
             max_area = 0
             bigges_cnt = 0
@@ -99,7 +101,10 @@ def mask_to_poly(mask, classes):
                     bigges_cnt = cnt
             contours = [bigges_cnt]
 
-        contours = np.array(contours).reshape(-1, 2).tolist()
+        contours = np.array(contours).reshape(-1, 2)  # .tolist()
+        if contours.shape[0] <= 2:
+            continue
+        contours = contours.tolist()
 
         points.append(contours)
     return points
