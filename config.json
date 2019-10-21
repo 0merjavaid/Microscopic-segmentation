@@ -1,0 +1,62 @@
+{
+	"root_dir": "./dataset/EF",
+	"segmentation": {
+		"num_of_exp": 4,
+		"experiments": [{
+				"name": "mrcnncell",
+				"architecture": "maskrcnn",
+				"batch_size": 2,
+				"num_classes": 4,
+				"model_path": "./checkpoints/maskrcnn_4.pt",
+				"class_names": [
+					"cell",
+					"mitosis",
+					"necrosis"
+				]
+			},
+			{
+				"name": "unetcell",
+				"architecture": "unet",
+				"batch_size": 2,
+				"num_classes": 2,
+				"model_path": "./checkpoints/unet.pt",
+				"class_names": [
+					"cell"
+				]
+			},
+			{
+				"name": "deeplabcell",
+				"architecture": "deeplab",
+				"batch_size": 2,
+				"num_classes": 2,
+				"model_path": "./checkpoints/deeplab.pt",
+				"class_names": [
+					"cell"
+				]
+			},
+			{
+				"name": "maskrcnnnucleus",
+				"architecture": "maskrcnn",
+				"batch_size": 2,
+				"num_classes": 2,
+				"model_path": "./checkpoints/maskrcnn_2.pt",
+				"class_names": [
+					"cell"
+				]
+			}
+		],
+		"tracking": {
+			"raw_image_extension": "tif",
+			"mask_extension": "png",
+			"mask_folder_suffix": "_mask_avg",
+			"show_ids": true,
+			"show_tracks": true,
+			"pixel_scale": 8.7e-7
+		},
+		"processing": {
+			"n_frames": 37,
+			"t_inc": 10,
+			"frame_selection_list": "[0:]"
+		}
+	}
+}

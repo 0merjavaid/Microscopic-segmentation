@@ -81,7 +81,7 @@ class Unet34(nn.Module):
         x = self.up3(x, self.sfs[1].features)
         x = self.up4(x, self.sfs[0].features)
         x = self.up5(x)
-        return F.sigmoid(x[:, 0])
+        return torch.sigmoid(x[:, 0])
 
     def close(self):
         """

@@ -154,7 +154,7 @@ class CellDataset(object):
             if self.transforms is not None:
 
                 img = self.transforms(Image.fromarray(img))
-                img = self.prep(img)
+                # img = self.prep(img)
                 bin_mask = self.transforms(
                     Image.fromarray(bin_mask.squeeze().astype(float)))
                 img = img.unsqueeze(0)
@@ -178,7 +178,7 @@ class Inference_Loader(data.Dataset):
             transforms.ToTensor(),
         ])
         self.transform_unet = transforms.Compose([
-            transforms.Resize((512, 512)),
+            transforms.Resize((1024, 1024)),
             transforms.ToTensor(),
             # normalize,
         ])

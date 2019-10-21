@@ -28,7 +28,7 @@ def get_transform(model, train):
             transform.append(T.RandomHorizontalFlip(0.5))
     else:
         preprocess = transforms.Compose([
-            transforms.Resize((512, 512)),
+            transforms.Resize((1024, 1024)),
             transforms.ToTensor(),
 
         ])

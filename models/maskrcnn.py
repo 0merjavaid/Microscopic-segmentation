@@ -8,13 +8,17 @@ from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 from torchvision.models.detection.backbone_utils import BackboneWithFPN
 
 
-def get_mask_rcnn(num_classes, max_instances):
+def get_mask_rcnn(num_classes, max_instances, backbone="resnet101"):
     # load an instance segmentation model pre-trained pre-trained on COCO
-    # model = torchvision.models.detection.maskrcnn_resnet50_fpn(
-    #     pretrained=True, box_detections_per_img=max_instances)
-    bb = resnet_fpn_backbone("101", False)
-    model = MaskRCNN(bb,
-                     num_classes=91)
+    if backbone == "resnet50":
+        print ("**************Adding Resnet 50 backbone***************")
+        model = torchvision.models.detection.maskrcnn_resnet50_fpn(
+            pretrained=True, box_detections_per_img=max_instances)
+    else:
+        print ("**************Adding Resnet 101 AntiAliaing backbone***************")
+        bb = resnet_fpn_backbone("101", False)
+        model = MaskRCNN(bb,
+                         num_classes=91, box_detections_per_img=max_instances)
     # get number of input features for the classifier
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     # replace the pre-trained head with a new one

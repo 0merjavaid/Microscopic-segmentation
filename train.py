@@ -40,6 +40,8 @@ def get_argparser():
                         help='maximum number of instances for maskRCNN default is 500')
     parser.add_argument('--config_path', default='config.txt',
                         help='a File containing the names of classes')
+    parser.add_argument('--maskrcnn_backbone', default='resnet101',
+                        help='resnet101 or resnet50 for maskrcnn backbone')
 
     args = parser.parse_args()
     assert args.labels_type in [
@@ -88,7 +90,7 @@ def main():
         collate_fn=utils.collate_fn)
 
     model = models.get_model(
-        args.model, args.weight_path, args.num_classes, args.max_instances)
+        args.model, args.weight_path, args.num_classes, args.max_instances, args.maskrcnn_backbone)
 
     if args.cuda:
         device = "cuda:0"

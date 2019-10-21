@@ -448,7 +448,8 @@ class COCOeval:
         Compute and display summary metrics for evaluation results.
         Note this functin can *only* be applied on the default parameter setting
         '''
-        def _summarize(ap=1, iouThr=None, areaRng='all', maxDets=100):
+        def _summarize(ap=1, iouThr=None, areaRng='all', maxDets=250):
+
             p = self.params
             iStr = ' {:<18} {} @[ IoU={:<9} | area={:>6s} | maxDets={:>3d} ] = {:0.3f}'
             titleStr = 'Average Precision' if ap == 1 else 'Average Recall'
@@ -481,20 +482,21 @@ class COCOeval:
             print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
             return mean_s
         def _summarizeDets():
+
             stats = np.zeros((6,))
             stats[0] = _summarize(
                 1, iouThr=0.5, maxDets=self.params.maxDets[2])
             stats[1] = _summarize(
                 1, iouThr=0.75, maxDets=self.params.maxDets[2])
             stats[2] = _summarize(
-                1, iouThr=0.90, maxDets=self.params.maxDets[2])
+                1, iouThr=0.95, maxDets=self.params.maxDets[2])
 
             stats[3] = _summarize(
                 0, iouThr=0.5, maxDets=self.params.maxDets[2])
             stats[4] = _summarize(
                 0, iouThr=0.75, maxDets=self.params.maxDets[2])
             stats[5] = _summarize(
-                0, iouThr=0.90, maxDets=self.params.maxDets[2])
+                0, iouThr=0.95, maxDets=self.params.maxDets[2])
 
             return stats
         def _summarizeKps():

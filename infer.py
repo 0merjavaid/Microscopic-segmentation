@@ -1,5 +1,6 @@
 import os
 import ast
+import json
 import cv2
 import time
 import torch
@@ -21,7 +22,7 @@ def get_argparser():
 
     parser.add_argument('--out_dir', default="./outputs/",
                         help='directory where output will be saved')
-    parser.add_argument('--config_path', default="./configuration.txt",
+    parser.add_argument('--config_path', default="./config.json",
                         help='path of configuration file')
     parser.add_argument('--max_instances', type=int, default=350,
                         help='maximum number of instances for maskRCNN default is 500')
@@ -75,24 +76,26 @@ class Inference:
         output = torch.max(output, 1)[1]
         output = output.cpu().detach().numpy()
         for i in range(len(output)):
-            test_path = os.path.join(
-                self.out_dir, directory[i], experiment_name, "deeplab", img_name[i]+".png")
             output_dir = os.path.join(
-                self.out_dir, directory[i], experiment_name, "deeplab", img_name[i]+".png")
+                self.out_dir, directory[i]+"_"+experiment_name)
             os.makedirs(output_dir, exist_ok=True)
             mask = output[i]
-            mask = cv2.resize(mask.astype("uint8"), (shape[i][1], shape[i][0]))
-            cv2.imwrite(os.path.join(output_dir, "deeplab.png"), mask)
+            mask = cv2.resize(mask.astype("uint8")*255,
+                              (shape[i][1], shape[i][0]))
+            cv2.imwrite(os.path.join(
+                output_dir+"/" + img_name[i]+".png"), mask)
 
     def process_unet(self, output, img_name, directory, experiment_name, shape):
         output = output.cpu().detach().numpy()
         output = ((output > 0.5).astype(float)*255).astype("uint8")
         for i in range(len(output)):
-            output_dir = os.path.join(self.out_dir, directory[i], img_name[i])
+            output_dir = os.path.join(
+                self.out_dir, directory[i]+"_"+experiment_name)
             os.makedirs(output_dir, exist_ok=True)
             mask = output[i]
             mask = cv2.resize(mask, (shape[i][1], shape[i][0]))
-            cv2.imwrite(os.path.join(output_dir, "unet.png"), mask)
+            cv2.imwrite(os.path.join(
+                output_dir+"/" + img_name[i]+".png"), mask)
 
     def process_mask(self, outputs, img_name, directory, experiment_name, images):
         images = images.cpu().detach().numpy()
@@ -110,23 +113,36 @@ class Inference:
             mask = mask.cpu().detach().numpy()
             img = np.transpose(images[i], [1, 2, 0])
 
+            output_dir = os.path.join(
+                self.out_dir, directory[i]+"_"+experiment_name)
+
             overlay, colored_mask, instances = self.visualize(
                 img, mask, scores, bboxes, classes, self.thres)
 
             output_boxes = torch.cat(
                 (classes.float().view(-1, 1), bboxes), 1).cpu().detach().numpy()
-            os.makedirs(os.path.join(self.out_dir, directory[i],
-                                     img_name[i]), exist_ok=True)
-            cv2.imwrite(os.path.join(self.out_dir, directory[i],
-                                     img_name[i], "overlay.png"), overlay)
-            cv2.imwrite(os.path.join(self.out_dir, directory[i],
-                                     img_name[i], "colored_mask.png"), colored_mask)
+            current_out_dir = os.path.join(
+                output_dir, "overlay")
+            os.makedirs(current_out_dir, exist_ok=True)
+            cv2.imwrite(current_out_dir+"/" +
+                        img_name[i]+".png", overlay)
+            current_out_dir = os.path.join(
+                output_dir, "colored_mask")
+            os.makedirs(current_out_dir, exist_ok=True)
+            cv2.imwrite(current_out_dir+"/" +
+                        img_name[i]+".png", colored_mask)
 
             for j, instance_class in enumerate(["combined"]+self.classes):
-                cv2.imwrite(os.path.join(
-                    self.out_dir, directory[i], img_name[i], instance_class+".png"), instances[j])
-            np.savetxt(os.path.join(
-                self.out_dir, directory[i], img_name[i], "boxes.txt"), output_boxes.reshape(-1, 5))
+                current_out_dir = os.path.join(
+                    output_dir, instance_class)
+                os.makedirs(current_out_dir, exist_ok=True)
+                cv2.imwrite(current_out_dir+"/" +
+                            img_name[i]+".png", instances[j])
+            current_out_dir = os.path.join(
+                output_dir, "boxes")
+            os.makedirs(current_out_dir, exist_ok=True)
+            np.savetxt(current_out_dir+"/" +
+                       img_name[i]+".txt", output_boxes.reshape(-1, 5))
 
     def visualize(self, image, mask, scores, boxes, classes,
                   threshold=0.5):
@@ -165,29 +181,15 @@ class Inference:
         return image.astype("uint8"), final_mask, instances
 
 
-def parse_cfg(path="./configuration.txt"):
+def parse_cfg(path="./config.json"):
     assert os.path.exists(path), "configuration file not found"
+    cfg = dict()
+    with open(path) as f:
+        parser = json.loads(f.read())
+    cfg["num_of_exp"] = parser["segmentation"]["num_of_exp"]
+    cfg["root_dir"] = parser["root_dir"]
+    cfg["experiments"] = parser["segmentation"]["experiments"]
 
-    with open(path, "r") as f:
-        lines = f.readlines()
-    start = False
-    cfg = {'experiments': []}
-    for line in lines:
-        if len(line.strip()) == 0 or line[0] == "#":
-            continue
-
-        if not start and "=segmentation=" in line.strip().lower():
-            start = True
-            continue
-        elif start and line.strip().lower()[0] == "=":
-            break
-        else:
-            if line.strip().lower()[0] == "[":
-                cfg['experiments'].append(
-                    ast.literal_eval(line.strip().lower()))
-            else:
-                line = line.split("=")
-                cfg[line[0].strip().lower()] = line[1].strip()
     return cfg
 
 
@@ -201,12 +203,12 @@ def main():
     experiments = cfg["experiments"]
     assert number_of_experiments == len(cfg["experiments"])
     for i in range(number_of_experiments):
-        experiment_name = experiments[i][0]
-        model_name = experiments[i][1]
-        num_classes = int(experiments[i][2])
-        classes = experiments[i][3]
-        batch_size = int(experiments[i][5])
-        weights_path = experiments[i][4]
+        experiment_name = experiments[i]["name"]
+        model_name = experiments[i]["architecture"]
+        num_classes = int(experiments[i]["num_classes"])
+        classes = experiments[i]["class_names"]
+        batch_size = int(experiments[i]["batch_size"])
+        weights_path = experiments[i]["model_path"]
 
         print ("Processing for ", model_name)
 
