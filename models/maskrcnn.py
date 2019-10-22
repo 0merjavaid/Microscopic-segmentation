@@ -1,3 +1,4 @@
+import torch
 import torchvision
 import torch.nn as nn
 import models.models_lpf.resnet as resnet
@@ -15,8 +16,8 @@ def get_mask_rcnn(num_classes, max_instances, backbone="resnet101"):
         model = torchvision.models.detection.maskrcnn_resnet50_fpn(
             pretrained=True, box_detections_per_img=max_instances)
     else:
-        print ("**************Adding Resnet 101 AntiAliaing backbone***************")
-        bb = resnet_fpn_backbone("101", False)
+
+        bb = resnet_fpn_backbone(backbone, False)
         model = MaskRCNN(bb,
                          num_classes=91, box_detections_per_img=max_instances)
     # get number of input features for the classifier
@@ -35,10 +36,14 @@ def get_mask_rcnn(num_classes, max_instances, backbone="resnet101"):
 
 
 def resnet_fpn_backbone(backbone_name, pretrained):
-    import torch
-    backbone = resnet.resnet101(filter_size=5)
-    backbone.load_state_dict(torch.load(
-        './checkpoints/resnet101_lpf5.pth.tar')['state_dict'])
+    if backbone_name == "resnet101_lpf" or True:
+        print ("**************Adding Resnet 101 AntiAliaing backbone***************")
+        backbone = resnet.resnet101(filter_size=5)
+        backbone.load_state_dict(torch.load(
+            './checkpoints/resnet101_lpf5.pth.tar')['state_dict'])
+    else:
+        print ("**************Adding Resnet 101 backbone***************")
+        backbone = torchvision.models.resnet101(pretrained=True)
     for name, parameter in backbone.named_parameters():
         if 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
             parameter.requires_grad_(False)

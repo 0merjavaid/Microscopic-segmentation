@@ -14,6 +14,7 @@ from tqdm import tqdm
 from utils import utils
 from dataloader.loader import Inference_Loader
 # Folder name/ Experiment name/ image category/ all images.jpg
+from distutils.dir_util import copy_tree, remove_tree
 
 
 def get_argparser():
@@ -40,12 +41,14 @@ class Inference:
         self.device = device
         self.classes = classes
         self.out_dir = output_dir
+        #self.out_dir = root_dir
         self.model_name = model_name
         self.batch_size = batch_size
         self.experiment_name = experiment_name
         self.model = models.get_model(
             model_name, weights_path, num_classes, num_instances)
         self.model.to(device).eval()
+        #self.root_dir = root_dir
         test_loader = Inference_Loader(root_dir)
         self.iterator = torch.utils.data.DataLoader(test_loader,
                                                     batch_size=batch_size,
@@ -193,6 +196,11 @@ def parse_cfg(path="./config.json"):
     return cfg
 
 
+def move_results(output_dir, root_dir):
+    copy_tree(output_dir, root_dir)
+    remove_tree(output_dir)
+
+
 def main():
     args = get_argparser()
     cfg = parse_cfg(args.config_path)
@@ -213,10 +221,12 @@ def main():
         print ("Processing for ", model_name)
 
         inference = Inference(model_name, experiment_name, root_dir, weights_path,
-                              device, args.out_dir, num_classes, classes,
+                              device, root_dir, num_classes, classes,
                               batch_size, args.max_instances)
 
         inference.infer()
+    # move_results(args.out_dir, root_dir)
+
 
 if __name__ == "__main__":
     main()

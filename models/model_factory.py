@@ -21,7 +21,7 @@ def get_model(name, weights, classes=4, max_instances=250, maskrcnn_backbone="re
         chosen_model = Unet34(m_base)
 
     elif name.lower() == "deeplab":
-        chosen_model = get_deeplab()
+        chosen_model = get_deeplab(classes=classes)
 
     else:
         print (name, " is currently not available, try MaskRCNN, UNET or Deeplab")

@@ -10,6 +10,8 @@ from PIL import Image
 from torch.utils import data
 import matplotlib.pyplot as plt
 from torchvision import transforms
+from itertools import groupby
+from operator import itemgetter
 
 
 class CellDataset(object):
@@ -185,10 +187,22 @@ class Inference_Loader(data.Dataset):
 
     def initialize(self):
         dataset = list()
-        dirs = os.listdir(self.root_dir)
-        assert len(dirs) > 0, "No directory found containing images"
-        # print (dirs)
-        for dir in dirs:
+        # dirs = os.listdir(self.root_dir)
+        all_files = []
+        sub_directory = []
+        for root, dirs, files in os.walk(self.root_dir):
+            for file in files:
+                relativePath = os.path.relpath(root, self.root_dir)
+                if relativePath == ".":
+                    relativePath = ""
+                all_files.append(
+                    (relativePath.count(os.path.sep), relativePath, file))
+        all_files.sort(reverse=False)
+        for (count, folder), files in groupby(all_files, itemgetter(0, 1)):
+            sub_directory.append(folder)
+        # print(sub_directory)
+        assert len(sub_directory) > 0, "No directory found containing images"
+        for dir in sub_directory:
             img_files = [os.path.join(self.root_dir, dir, i)
                          for i in ['*.tif', '*.png', "*.jpg"]]
             files = list()

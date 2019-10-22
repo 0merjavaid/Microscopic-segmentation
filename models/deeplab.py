@@ -3,7 +3,7 @@ import torchvision
 import torch.nn as nn
 
 
-def get_deeplab(backbone="resnet101", pretrained=True):
+def get_deeplab(backbone="resnet101", classes=2, pretrained=True):
     if backbone == "resnet50":
         model = torchvision.models.segmentation.deeplabv3_resnet50(
             pretrained=pretrained)
@@ -13,7 +13,7 @@ def get_deeplab(backbone="resnet101", pretrained=True):
 
     model.classifier[4] = nn.Conv2d(
         in_channels=256,
-        out_channels=2,
+        out_channels=classes,
         kernel_size=1,
         stride=1
     )
