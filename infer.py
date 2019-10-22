@@ -12,6 +12,7 @@ import utils.utils
 from PIL import Image
 from tqdm import tqdm
 from utils import utils
+from collections import defaultdict
 from dataloader.loader import Inference_Loader
 # Folder name/ Experiment name/ image category/ all images.jpg
 from distutils.dir_util import copy_tree, remove_tree
@@ -36,7 +37,7 @@ def get_argparser():
 class Inference:
 
     def __init__(self, model_name, experiment_name, root_dir, weights_path, device, output_dir,
-                 num_classes, classes, batch_size, num_instances):
+                 num_classes, classes, batch_size, backbone, num_instances):
         self.thres = 0.5
         self.device = device
         self.classes = classes
@@ -46,7 +47,7 @@ class Inference:
         self.batch_size = batch_size
         self.experiment_name = experiment_name
         self.model = models.get_model(
-            model_name, weights_path, num_classes, num_instances)
+            model_name, weights_path, num_classes, num_instances, backbone)
         self.model.to(device).eval()
         #self.root_dir = root_dir
         test_loader = Inference_Loader(root_dir)
@@ -217,12 +218,15 @@ def main():
         classes = experiments[i]["class_names"]
         batch_size = int(experiments[i]["batch_size"])
         weights_path = experiments[i]["model_path"]
-
+        try:
+            backbone = experiments[i]["backbone"]
+        except:
+            backbone = None
         print ("Processing for ", model_name)
 
         inference = Inference(model_name, experiment_name, root_dir, weights_path,
                               device, root_dir, num_classes, classes,
-                              batch_size, args.max_instances)
+                              batch_size, backbone, args.max_instances)
 
         inference.infer()
     # move_results(args.out_dir, root_dir)

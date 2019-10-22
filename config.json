@@ -2,7 +2,8 @@
 	"root_dir": "./dataset/EF",
 	"segmentation": {
 		"num_of_exp": 4,
-		"experiments": [{
+		"experiments": [
+		{
 				"name": "mrcnncell",
 				"architecture": "maskrcnn",
 				"batch_size": 2,
@@ -13,6 +14,8 @@
 					"mitosis",
 					"necrosis"
 				]
+				,
+				"backbone":"resnet50"
 			},
 			{
 				"name": "unetcell",
@@ -22,7 +25,7 @@
 				"model_path": "./checkpoints/unet.pt",
 				"class_names": [
 					"cell"
-				]
+				] 
 			},
 			{
 				"name": "deeplabcell",
@@ -43,6 +46,8 @@
 				"class_names": [
 					"cell"
 				]
+				,
+				"backbone":"resnet101_lpf"
 			}
 		],
 		"tracking": {

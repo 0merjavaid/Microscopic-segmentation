@@ -36,7 +36,7 @@ def get_mask_rcnn(num_classes, max_instances, backbone="resnet101"):
 
 
 def resnet_fpn_backbone(backbone_name, pretrained):
-    if backbone_name == "resnet101_lpf" or True:
+    if backbone_name == "resnet101_lpf":
         print ("**************Adding Resnet 101 AntiAliaing backbone***************")
         backbone = resnet.resnet101(filter_size=5)
         backbone.load_state_dict(torch.load(
