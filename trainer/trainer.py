@@ -41,18 +41,18 @@ class TrainModel:
             loss = self.criterion(output, labels)
         return output, loss, labels
 
-    def train_unet(self, epoch, data_iterator, val_iterator):
+    def train_unet_deeplab(self, epoch, data_iterator, val_iterator):
         self.model.train()
-        train_loss, train_accuracy = list(), list()
+        train_loss = list()
         best_model = None
-        best_val_accuracy = 0
         best_epoch = 0
         if (epoch+1) % 15 == 0:
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] /= 1.5
                 print ("Changing Learning Rate:,", param_group['lr'])
         for i, (images, labels)in enumerate(tqdm(data_iterator)):
-            labels = [label["bin_mask"] for label in labels]
+
+            labels = [label["mask"] for label in labels]
             output, loss, labels = self.predict(
                 images, labels)
 
@@ -76,7 +76,7 @@ class TrainModel:
 
     def train(self, epoch, train_iterator, test_iterator):
         if self.model_type.lower() == "unet" or self.model_type.lower() == "deeplab":
-            self.train_unet(epoch, train_iterator, test_iterator)
+            self.train_unet_deeplab(epoch, train_iterator, test_iterator)
             if epoch % 1 == 0:
                 score = self.test(test_iterator, False)
                 path = "checkpoints/"+self.model_type+".pt"
@@ -88,24 +88,55 @@ class TrainModel:
         else:
             self.train_maskrcnn(train_iterator, test_iterator, epoch)
 
+    def dice(self, pred, target, classes=2, epsilon=1e-6):
+
+        pred = pred.cpu().detach().numpy().squeeze()
+        target = target.cpu().detach().numpy().squeeze()
+        one_hot_target = np.expand_dims(np.arange(classes) ==
+                                        target[..., None], 0).astype(int)
+
+        one_hot_pred = np.expand_dims(np.arange(classes) ==
+                                      pred[..., None], 0).astype(int)
+        mean_score = 0
+        for i in range(classes):
+            if i == 0:  # ignore background
+                continue
+            score = dice.dice_coeff(
+                torch.tensor(one_hot_pred[:, :, :, i]).float(), torch.tensor(one_hot_target[:, :, :, i]).float())
+            mean_score += score
+        # mean_dice = np.zeros((classes))
+        # check_no_class = np.sum(one_hot_target, axis=(
+        #     0, 1)) + np.sum(one_hot_pred, axis=(0, 1))
+
+        # mean_dice[check_no_class == 0] = 1
+        # dice = (2 * np.sum(one_hot_target * one_hot_pred, axis=(0, 1))) / (np.sum(one_hot_target, axis=(
+        #     0, 1)) + np.sum(one_hot_pred, axis=(0, 1))+epsilon)
+        # # dice[mean_dice == 1] = 1
+        # # print (dice)
+        return mean_score/(classes-1)
+
     def test(self,  val_iterator, save_images=False):
         print ("\nTesting ...")
         self.model.eval()
         summ = 0
         total_images = 0
         for i, (images, labels)in enumerate(tqdm(val_iterator)):
-            labels = [label["bin_mask"] for label in labels]
+            labels = [label["mask"] for label in labels]
             total_images += 1
             with torch.no_grad():
                 output, loss, labels = self.predict(
                     images, labels)
                 if self.model_type == "deeplab":
+                    classes = output.size(1)
                     output = torch.max(output, 1)[1]
-                output = (output > 0.55).float()
-                score = dice.dice_coeff(output, labels.float())
+                else:
+                    classes = 2
+                    output = (output > 0.55).float()
+                # score = dice.dice_coeff(output, labels.float())
+                score = self.dice(output, labels.float(), classes)
                 summ += score
 
-                if save_images or True:
+                if save_images:
                     output = output.cpu().detach().numpy().squeeze()
                     im = np.transpose(images[0].cpu().detach(
                     ).numpy().squeeze(), (1, 2, 0))
@@ -121,5 +152,5 @@ class TrainModel:
         print ("Test DICE Coefficeint = ", dice_score)
         return dice_score
 
-    def eval_metrics(self, pred, target):
+    def eval_metrics(self, pred, target, classes=2):
         return float(torch.sum(torch.max(pred, 1)[1] == target))/pred.shape[0]

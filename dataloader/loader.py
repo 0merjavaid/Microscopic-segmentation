@@ -146,8 +146,17 @@ class CellDataset(object):
             if self.transforms is not None:
                 img, target = self.transforms(img, target)
         else:
+            multiclass_segmask = np.zeros_like(bin_mask)
+
+            for i, (img_path, cls, points)in enumerate(image_list):
+
+                multiclass_segmask = cv2.drawContours(
+                    multiclass_segmask, [points], -1, self.classes[cls], -1)
+
             all_points = [i[2] for i in image_list]
             bin_mask = cv2.drawContours(bin_mask, all_points, -1, 1, -1)
+
+            mask = bin_mask if self.segmentation_type == "unet" else multiclass_segmask
             img = np.array(img)
             if self.mode == "Train":
 
@@ -160,7 +169,7 @@ class CellDataset(object):
                 bin_mask = self.transforms(
                     Image.fromarray(bin_mask.squeeze().astype(float)))
                 img = img.unsqueeze(0)
-                target["bin_mask"] = bin_mask.float()
+                target["mask"] = bin_mask.float()
 
         return img, target
 

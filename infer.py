@@ -84,7 +84,7 @@ class Inference:
                 self.out_dir, directory[i]+"_"+experiment_name)
             os.makedirs(output_dir, exist_ok=True)
             mask = output[i]
-            mask = cv2.resize(mask.astype("uint8")*255,
+            mask = cv2.resize(mask.astype("uint8"),
                               (shape[i][1], shape[i][0]))
             cv2.imwrite(os.path.join(
                 output_dir+"/" + img_name[i]+".png"), mask)
