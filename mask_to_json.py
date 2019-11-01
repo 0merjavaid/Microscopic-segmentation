@@ -47,10 +47,10 @@ def initialize_pairs(root, binary):
         masks = list()
         for key in classes.keys():
             class_id = classes[key]
-            class_name = key + ".png" if binary != 2 else "instances_ids.png"
+            class_name = key + ".png" if binary != 2 else "labeled.png"
             class_label_path = os.path.join(set_path, class_name)
             assert class_label_path in pngs, class_name+" Not Found"
-            mask = cv2.imread(class_label_path)
+            mask = cv2.imread(class_label_path, -1)
             polygons = mask_to_poly(mask, binary)
 
             for poly in polygons:
@@ -79,14 +79,17 @@ def initialize_pairs(root, binary):
 def mask_to_poly(mask, classes):
     points = []
     unique_colors_mask = mask.reshape(
-        -1) if classes == 2 else mask.reshape(-1, mask.shape[2])
+        -1)  # if classes == 2 else mask.reshape(-1, mask.shape[2])
     unique_ids = np.unique(unique_colors_mask, axis=0)
     unique_ids = unique_ids[1:]
+    # print (unique_ids)
     for uid in unique_ids:
-        segment = mask.copy()
-        uid = uid if classes != 2 else np.array([uid] * 3)
+        segment = np.zeros_like(mask)
+        # uid = uid #if classes != 2 else np.array([uid] * 3)
         # print (uid, segment.shape)
-        segment = cv2.inRange(segment, uid, uid)
+        segment[mask == uid] = 1
+        segment = segment.astype("uint8")
+        # print (np.sum(segment))
 
         contours, hierarchy = cv2.findContours(
             segment, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -105,8 +108,13 @@ def mask_to_poly(mask, classes):
         if contours.shape[0] <= 2:
             continue
         contours = contours.tolist()
-
         points.append(contours)
+    # dell = np.zeros_like(mask).astype("uint8")
+    # for point in points:
+    #     dell = cv2.fillPoly(dell, pts=[point], color=255)
+    # print (np.sum(dell))
+    # cv2.imwrite("img.jpg", dell.astype("uint8"))
+    # 0/0
     return points
 
 
